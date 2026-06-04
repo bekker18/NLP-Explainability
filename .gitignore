@@ -1,0 +1,57 @@
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.installed.cfg
+*.egg-info
+
+# ── Virtual environments ─────────────────────────────────────────────────────
+.env
+.venv
+env/
+venv/
+ENV/
+
+# ── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Data files (large / raw — not committed to git) ─────────────────────────
+data/Fake.csv
+data/True.csv
+data/X_test.csv
+data/y_test.csv
+
+# ── Model artefacts (large binaries) ─────────────────────────────────────────
+models/pipeline.joblib
+
+# Keep plots so the README renders on GitHub
+!models/confusion_matrix.png
+!models/global_shap_summary.png
+
+# ── OS / editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Gradio / HuggingFace ─────────────────────────────────────────────────────
+gradio_cached_examples/
+flagged/
+*.pth
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.log
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
