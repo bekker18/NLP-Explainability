@@ -3,15 +3,15 @@ import joblib
 import pandas as pd
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # headless - no display needed
+matplotlib.use("Agg")  # headless - no display needed
 import matplotlib.pyplot as plt
 
 def load_artefacts():
   """Load pipeline and test data saved during training"""
 
-  pipeline = joblib.load('models/pipeline.joblib')
-  X_test = pd.read_csv('data/X_test.csv')
-  y_test = pd.read_csv('data/y_test.csv')
+  pipeline = joblib.load("models/pipeline.joblib")
+  X_test = pd.read_csv("data/X_test.csv")
+  y_test = pd.read_csv("data/y_test.csv")
 
   return pipeline, X_test, y_test
 
@@ -23,13 +23,13 @@ def get_explainer(pipeline):
   Logistic Regressor is a linear model
   """
 
-  tfidf = pipeline.named_steps['tfidf']
-  clf = pipeline.named_steps['clf']
+  tfidf = pipeline.named_steps["tfidf"]
+  clf = pipeline.named_steps["clf"]
 
   # Transform a backgroud sample so SHAP knows the features distribution
   # We use the mean of a 1000-sample background (standard practice)
   if X_test_global is None:
-    raise ValueError('X_test is not loaded. Call load_artefacts() firts.')
+    raise ValueError("X_test is not loaded. Call load_artefacts() firts.")
   background_texts = X_test_global.sample(1000, random_state=42)
   background_matrix = tfidf.transform(background_texts)
   background_mean = shap.kmeans(background_matrix, 10)
@@ -57,7 +57,7 @@ def explain_single(text: str, pipeline, explainer, tfidf):
   # Prediction
   proba = pipeline.predict_proba([text])[0]
   pred = int(pipeline.predict([text])[0])
-  label = 'Real' if pred == 1 else 'Fake'
+  label = "Real" if pred == 1 else "Fake"
   conf = proba[pred]
 
   # Map non-zero SHAP values back to feature names
@@ -73,24 +73,24 @@ def explain_single(text: str, pipeline, explainer, tfidf):
 
   return label, conf, word_shap[:20]  # top-20 most influential words
 
-def plot_top_words(word_shap, title='Top contributing words', save_path=None):
+def plot_top_words(word_shap, title="Top contributing words", save_path=None):
   """
   Horizontal bar chart - red = pushed toward Fake, blue = pushed toward Real.
   """
 
   words, values = zip(*word_shap[:15])
-  colors = ['#d73027' if v < 0 else '#4575b4' for v in values]
+  colors = ["#d73027" if v < 0 else "#4575b4" for v in values]
 
   fig, ax = plt.subplots(figsize=(7, 4))
   bars = ax.barh(words, values, colors=colors)
-  ax.axvline(0, color='black', linewidth=0.8)
-  ax.set_xlabel('SHAP value (negative -> Fake | positive -> Real)')
+  ax.axvline(0, color="black", linewidth=0.8)
+  ax.set_xlabel("SHAP value (negative -> Fake | positive -> Real)")
   ax.set_title(title)
   ax.invert_yaxis()
   plt.tight_layout()
 
   if save_path:
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.savefig(save_path, dpi=150, bbox_inches="tight")
     plt.close()
   else:
     plt.show()
@@ -104,8 +104,8 @@ def run_batch_analysis(n_samples=200):
   global pipeline, X_test_global, y_test_global
   pipeline, X_test_global, y_test_global = load_artefacts()
 
-  tfidf = pipeline.named_steps['tfidf']
-  clf = pipeline.named_steps['clf']
+  tfidf = pipeline.named_steps["tfidf"]
+  clf = pipeline.named_steps["clf"]
   sample = X_test_global.sample(n_samples, random_state=42)
   X_vec = tfidf.transform(sample)
 
@@ -124,15 +124,15 @@ def run_batch_analysis(n_samples=200):
   top_values = [mean_abs[i] for i in top_idx]
   
   fig, ax = plt.subplots(figsize=(7, 5))
-  ax.barh(top_words[::-1], top_values[::-1], color='#4575b4', alpha=0.8)
-  ax.set_xlabel('Mean |SHAP value| across test sample')
-  ax.set_title('Global feature importance (top 20 words)')
+  ax.barh(top_words[::-1], top_values[::-1], color="#4575b4", alpha=0.8)
+  ax.set_xlabel("Mean |SHAP value| across test sample")
+  ax.set_title("Global feature importance (top 20 words)")
   plt.tight_layout()
-  plt.savefig('models/global_shap_summary.png', dpi=150, bbox_inches='tight')
+  plt.savefig("models/global_shap_summary.png", dpi=150, bbox_inches="tight")
   plt.close()
-  print('Global SHAP summary saved.')
+  print("Global SHAP summary saved.")
 
   return explainer, tfidf
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   run_batch_analysis()
