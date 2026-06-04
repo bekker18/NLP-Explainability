@@ -9,9 +9,47 @@ import matplotlib.pyplot as plt
 def load_artefacts():
   """Load pipeline and test data saved during training"""
 
-  pipeline = joblib.load("models/pipeline.joblib")
-  X_test = pd.read_csv("data/X_test.csv")
-  y_test = pd.read_csv("data/y_test.csv")
+  pipeline = joblib.load("../models/pipeline.joblib")
+  tfidf = pipeline.named_steps["tfidf"]
+
+  X_test_df = pd.read_csv("../data/X_test.csv")
+  y_test_df = pd.read_csv("../data/y_test.csv")
+
+  print("X_test shape:", X_test_df.shape)
+  print("X_test columns:", X_test_df.columns.tolist())
+  print(X_test_df.head())
+
+  # Remove saved pandas index columns
+  X_test_df = X_test_df.loc[:, ~X_test_df.columns.str.contains("^Unnamed")]
+
+  best_col = None
+  best_nnz = -1
+
+  # Find which column produces non-zero TF-IDF vectors
+  for col in X_test_df.columns:
+    texts = X_test_df[col].fillna("").astype(str)
+
+    test_sample = texts.head(min(200, len(texts)))
+    mat = tfidf.transform(test_sample)
+
+    print(f"Column: {col} | TF-IDF non-zero values: {mat.nnz}")
+    print("Example:", texts.iloc[0][:200])
+    print("-" * 50)
+
+    if mat.nnz > best_nnz:
+      best_nnz = mat.nnz
+      best_col = col
+
+  if best_col is None or best_nnz == 0:
+    raise ValueError(
+      "No valid text column found in X_test.csv. "
+      "Your X_test.csv probably does not contain the real news text."
+    )
+
+  print(f"Using text column: {best_col}")
+
+  X_test = X_test_df[best_col].fillna("").astype(str)
+  y_test = y_test_df.iloc[:, 0]
 
   return pipeline, X_test, y_test
 
@@ -30,11 +68,21 @@ def get_explainer(pipeline):
   # We use the mean of a 1000-sample background (standard practice)
   if X_test_global is None:
     raise ValueError("X_test is not loaded. Call load_artefacts() firts.")
-  background_texts = X_test_global.sample(1000, random_state=42)
-  background_matrix = tfidf.transform(background_texts)
-  background_mean = shap.kmeans(background_matrix, 10)
+  
+  background_texts = X_test_global.sample(
+    n=min(1000, len(X_test_global)),
+    random_state=0
+  )
 
-  explainer = shap.LinearExplainer(clf, background_mean)
+  background_matrix = tfidf.transform(background_texts)
+
+  if background_matrix.nnz == 0:
+    raise ValueError(
+      "TF-IDF background matrix is all zeros. "
+      "You are probably using the wrong text column from X_test.csv."
+    )
+  
+  explainer = shap.LinearExplainer(clf, background_matrix)
 
   return explainer, tfidf
 
@@ -61,7 +109,7 @@ def explain_single(text: str, pipeline, explainer, tfidf):
   conf = proba[pred]
 
   # Map non-zero SHAP values back to feature names
-  feature_names = tfidf.get_features_names_out()
+  feature_names = tfidf.get_feature_names_out()
   nonzero_idx = vec.nonzero()[1]  # indices of present features
 
   word_shap = [
@@ -97,8 +145,8 @@ def plot_top_words(word_shap, title="Top contributing words", save_path=None):
 
 def run_batch_analysis(n_samples=200):
   """
-  Compute SHAP valuesfor a sample of the test set and produce
-  a global summery plot (which features matter most overall)
+  Compute SHAP values for a sample of the test set and produce
+  a global summary plot.
   """
 
   global pipeline, X_test_global, y_test_global
@@ -106,31 +154,44 @@ def run_batch_analysis(n_samples=200):
 
   tfidf = pipeline.named_steps["tfidf"]
   clf = pipeline.named_steps["clf"]
-  sample = X_test_global.sample(n_samples, random_state=42)
+
+  sample = X_test_global.sample(
+    n=min(n_samples, len(X_test_global)),
+    random_state=42
+  )
+
   X_vec = tfidf.transform(sample)
 
-  background = shap.kmeans(
-    tfidf.transform(X_test_global.sample(1000, random_state=0)), 10
+  background_texts = X_test_global.sample(
+    n=min(1000, len(X_test_global)),
+    random_state=0
   )
-  explainer = shap.LinearExplainer(clf, background)
-  shap_values = explainer.shap_values(X_vec)  # (n_samples, vocab_size)
 
-  # Global bar summary - top-20 features by mean |SHAP|
+  background_matrix = tfidf.transform(background_texts)
+
+  if background_matrix.nnz == 0:
+    raise ValueError(
+      "TF-IDF background matrix is all zeros. "
+      "X_test still does not contain proper text."
+    )
+
+  explainer = shap.LinearExplainer(clf, background_matrix)
+  shap_values = explainer.shap_values(X_vec)
+
   mean_abs = np.abs(shap_values).mean(axis=0)
   top_idx = np.argsort(mean_abs)[::-1][:20]
   feature_names = tfidf.get_feature_names_out()
 
   top_words = [feature_names[i] for i in top_idx]
   top_values = [mean_abs[i] for i in top_idx]
-  
+
   fig, ax = plt.subplots(figsize=(7, 5))
   ax.barh(top_words[::-1], top_values[::-1], color="#4575b4", alpha=0.8)
   ax.set_xlabel("Mean |SHAP value| across test sample")
   ax.set_title("Global feature importance (top 20 words)")
   plt.tight_layout()
-  plt.savefig("models/global_shap_summary.png", dpi=150, bbox_inches="tight")
+  plt.savefig("../models/global_shap_summary.png", dpi=150, bbox_inches="tight")
   plt.close()
-  print("Global SHAP summary saved.")
 
   return explainer, tfidf
 

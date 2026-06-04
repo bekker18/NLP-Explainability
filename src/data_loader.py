@@ -19,12 +19,21 @@ def load_raw_data(fake_path: str, real_path: str) -> pd.DataFrame:
   return df.sample(frac=1, random_state=42).reset_index(drop=True)  # shuffle
 
 def clean_text(text: str) -> str:
-  """Basic text cleaning: lowercase, strip URLs, extra spaces"""
+  """Basic text cleaning: lowercase, remove URLs, keep word boundaries."""
 
-  text = text.lower()
-  text = re.sub(r"http\S+|www\S+", "", text)  # remove URLs
-  text = re.sub(r"[^a-z\s]", "", text)  # keep only letters
-  text = re.sub(r"\s+", "", text).strip()  # collapse whitespace
+  if pd.isna(text):
+    return ""
+
+  text = str(text).lower()
+
+  # Remove URLs
+  text = re.sub(r"http\S+|www\S+", " ", text)
+
+  # Replace non-letters with spaces
+  text = re.sub(r"[^a-z\s]", " ", text)
+
+  # Collapse multiple spaces into one space
+  text = re.sub(r"\s+", " ", text).strip()
 
   return text
 

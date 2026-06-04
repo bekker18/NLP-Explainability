@@ -27,7 +27,6 @@ def build_pipeline() -> Pipeline:
       max_iter=1000,
       C=5.0,  # inverse regularization strength
       solver="lbfgs",
-      n_jobs=-1
     )),
   ])
 
@@ -50,12 +49,12 @@ def plot_confusion_matrix(y_test, y_pred, save_path: str):
   plt.close()
   print(f"Confusion matrix saved to {save_path}")
 
-def train(fake_path="data/Fake.csv", real_path="data/Real.csv"):
+def train(fake_path="../data/Fake.csv", real_path="../data/Real.csv"):
   # Load & preprocess
   print("Loading data...")
   df = load_raw_data(fake_path, real_path)
   df = preprocess(df)
-  print(f"Dataset size: {len(df):,} rows -"
+  print(f"Dataset size: {len(df):,} rows - "
         f"{df["label"].value_counts().to_dict()}")
   
   # Split
@@ -63,7 +62,7 @@ def train(fake_path="data/Fake.csv", real_path="data/Real.csv"):
     df["text"], df["label"],
     test_size=0.2, random_state=42, stratify=df["label"]
   )
-  print(f"Train: {len(X_train):,} Test: {len(y_train):,}")
+  print(f"Train: {len(X_train):,} Test: {len(X_test):,}")
 
   # Train
   print("Training pipeline...")
@@ -77,13 +76,13 @@ def train(fake_path="data/Fake.csv", real_path="data/Real.csv"):
   print(classification_report(y_test,y_pred,target_names=["Fake", "Real"]))
 
   # Persist artefacts
-  plot_confusion_matrix(y_test, y_pred, "models/confusion_matrix.png")
-  joblib.dump(pipeline, "models/pipeline.joblib")
+  plot_confusion_matrix(y_test, y_pred, "../models/confusion_matrix.png")
+  joblib.dump(pipeline, "../models/pipeline.joblib")
   print("Model saved to models/pipeline.joblib")
 
   # Also save the test split for SHAP analysis
-  X_test.to_csv("data/X_test.csv", index=False)
-  y_test.to_csv("data/y_test.csv", index=False)
+  X_test.to_csv("../data/X_test.csv", index=False)
+  y_test.to_csv("../data/y_test.csv", index=False)
 
   return pipeline, X_test, y_test
 

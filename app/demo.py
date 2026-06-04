@@ -1,64 +1,97 @@
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_DIR = PROJECT_ROOT / "src"
+
+sys.path.insert(0, str(SRC_DIR))
 
 import gradio as gr
 import joblib
 import shap
+from shap.maskers import Independent
 import pandas as pd
-import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import io
-import base64
 
 from data_loader import clean_text
 
 # Load the model
-pipeline = joblib.load("models/pipeline.joblib")
+pipeline = joblib.load(PROJECT_ROOT / "models" / "pipeline.joblib")
 tfidf = pipeline.named_steps["tfidf"]
 clf = pipeline.named_steps["clf"]
 
-# Build a lighweight explainer with small background
-_bg_texts = pd.read_csv("data/X_test.csv").iloc[:, 0].astype(str).sample(500, random_state=0)
-_bg_vec = tfidf.transform(_bg_texts)
-_bg_kmean = shap.kmeans(_bg_vec, 10)
-explainer = shap.LinearExplainer(clf, _bg_kmean)
+# Build a lightweight SHAP explainer
+X_test_df = pd.read_csv(PROJECT_ROOT / "data" / "X_test.csv")
 
-# Prediction + explanation
+if "text" not in X_test_df.columns:
+  raise ValueError("X_test.csv must contain a 'text' column.")
+
+_bg_texts = X_test_df["text"].fillna("").astype(str).sample(
+  n=min(500, len(X_test_df)),
+  random_state=0
+)
+
+_bg_vec = tfidf.transform(_bg_texts)
+
+if _bg_vec.nnz == 0:
+  raise ValueError(
+    "Background TF-IDF matrix is empty. "
+    "Rerun training after fixing clean_text() so words keep spaces."
+  )
+
+masker = Independent(_bg_vec, max_samples=100)
+explainer = shap.LinearExplainer(clf, masker)
+
 def predict_and_explain(raw_text: str):
+  """Predict Real/Fake and return SHAP word-level explanation plot."""
+
   if not raw_text.strip():
     return "-", "-", None
-  
+
   text = clean_text(raw_text)
   vec = tfidf.transform([text])
 
   # Prediction
   proba = pipeline.predict_proba([text])[0]
   pred = int(pipeline.predict([text])[0])
+
   label = "Real" if pred == 1 else "Fake"
-  conf = f"{proba[pred]*100:.1f}% confident"
+  conf = f"{proba[pred] * 100:.1f}% confident"
 
   # SHAP values
-  sv = explainer.shap_values(vec)[0]  # 1D
+  shap_values = explainer.shap_values(vec)
+
+  if isinstance(shap_values, list):
+    sv = shap_values[1][0] if len(shap_values) > 1 else shap_values[0][0]
+  else:
+    sv = shap_values[0]
+
   feature_names = tfidf.get_feature_names_out()
   nonzero_idx = vec.nonzero()[1]
 
   word_shap = sorted(
-    [(feature_names[i], float(sv[i])) for i in nonzero_idx if sv[i] != 0],
-    key = lambda x: abs(x[1]), reverse=True
+    [
+      (feature_names[i], float(sv[i]))
+      for i in nonzero_idx
+      if sv[i] != 0
+    ],
+    key=lambda x: abs(x[1]),
+    reverse=True
   )[:15]
 
   if not word_shap:
     return label, conf, None
-  
+
   words, values = zip(*word_shap)
   colors = ["#d73027" if v < 0 else "#4575b4" for v in values]
 
   fig, ax = plt.subplots(figsize=(7, 4))
   ax.barh(list(words), list(values), color=colors)
   ax.axvline(0, color="black", linewidth=0.8)
-  ax.set_xlabel("<- pushes toward FAKE  |  pushes toward REAL ->")
+  ax.set_xlabel("<- pushes toward FAKE | pushes toward REAL ->")
   ax.set_title("Word-level SHAP contributions")
   ax.invert_yaxis()
   plt.tight_layout()
@@ -68,9 +101,10 @@ def predict_and_explain(raw_text: str):
 # Gradio UI
 with gr.Blocks(title="Fake News Detector + SHAP") as demo:
   gr.Markdown("""
-  # Fake News Detectorwith SHAP Explanations
-  Paste a news headline or article . The model predicts Real vs Fake
-  **and shows which words drove the decision.**
+  # Fake News Detector with SHAP Explanations
+
+  Paste a news headline or article. The model predicts **Real** vs **Fake**
+  and shows which words drove the decision.
   """)
 
   with gr.Row():
@@ -81,18 +115,18 @@ with gr.Blocks(title="Fake News Detector + SHAP") as demo:
     )
 
   with gr.Row():
-    btn = gr.Button("Analyse", variant="primary")
+    btn = gr.Button("Analyze", variant="primary")
 
   with gr.Row():
-    lable_out = gr.Textbox(label="Predictions")
+    label_out = gr.Textbox(label="Prediction")
     conf_out = gr.Textbox(label="Confidence")
 
-  shap_plot = gr.Plot(label="SHAP explanation - wich words matter?")
+  shap_plot = gr.Plot(label="SHAP explanation - which words matter?")
 
   btn.click(
     fn=predict_and_explain,
     inputs=text_input,
-    outputs=[lable_out, conf_out, shap_plot]
+    outputs=[label_out, conf_out, shap_plot]
   )
 
   gr.Examples(
