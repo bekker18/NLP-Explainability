@@ -1,0 +1,34 @@
+services:
+  # ---------------------------------------------------------------
+  # Default service: serve the Gradio demo on http://localhost:7860
+  #   docker compose up demo
+  # ---------------------------------------------------------------
+  demo:
+    build: .
+    image: nlp-explainability:latest
+    ports:
+      - "7860:7860"
+    volumes:
+      # Persist / share artefacts with the host. The trained pipeline and
+      # X_test.csv already live here, so the demo works immediately.
+      - ./models:/app/models
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------
+  # Optional service: retrain the model + regenerate SHAP summary.
+  # Requires data/Fake.csv and data/Real.csv on the host (they are
+  # mounted in, not baked into the image).
+  #   docker compose run --rm train
+  # ---------------------------------------------------------------
+  train:
+    build: .
+    image: nlp-explainability:latest
+    working_dir: /app/src
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+    # train.py writes the pipeline + test split; explain.py writes the
+    # global SHAP summary. Both use paths relative to src/.
+    command: sh -c "python train.py && python explain.py"
+    profiles: ["train"]

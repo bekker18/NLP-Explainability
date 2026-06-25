@@ -1,0 +1,53 @@
+# ---- Virtual environments (the bundled .venv is ~hundreds of MB) ----
+.venv/
+env/
+venv/
+ENV/
+
+# ---- Version control ----
+.git/
+.gitignore
+
+# ---- Python caches / build artefacts ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+*.ipynb
+
+# ---- Raw training data (large; demo image does not need it) ----
+# Mount these via docker-compose when you want to (re)train.
+data/Fake.csv
+data/Real.csv
+
+# NOTE: data/X_test.csv and models/pipeline.joblib are intentionally NOT
+# ignored — the Gradio demo loads them at startup.
+
+# ---- Gradio / HuggingFace runtime ----
+.gradio/
+gradio_cached_examples/
+flagged/
+
+# ---- Docker / OS / editor ----
+Dockerfile
+.dockerignore
+docker-compose.yml
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.log
